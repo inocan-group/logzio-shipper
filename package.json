@@ -1,13 +1,17 @@
 {
-  "name": "log-shipper",
+  "name": "logzio-shipper",
   "version": "0.1.0",
   "description": "log-shipper",
   "license": "MIT",
-  "repository": "https://your-server.com/inocan_move/log-shipper",
+  "repository": "://github.com/inocan-group/logzio-shipper",
   "author": "Ken Snyder <ken@ken.net>",
   "keywords": [
     "serverless",
-    "typescript"
+    "typescript",
+    "logging",
+    "aws",
+    "lambda",
+    "logzio"
   ],
   "files": [
     "lib"
