@@ -1,5 +1,70 @@
 service: log-shipper
 custom:
-  stage: "${opt:stage, self:provider.stage}"
-  region: "${opt:region, self:provider.region}"
-
+  stage: '${opt:stage, self:provider.stage}'
+  region: '${opt:region, self:provider.region}'
+  webpack:
+    webpackConfig: ./webpack.config.js
+    includeModules:
+      forceExclude:
+        - aws-sdk
+        - firemock
+        - faker
+    packager: yarn
+package:
+  individually: true
+  excludeDevDependencies: false
+  browser: false
+provider:
+  name: aws
+  runtime: nodejs8.10
+  profile: PROFILE
+  stage: prod
+  region: us-east-1
+  environment: '${file(serverless-config/env.yml):${self:custom.stage}}'
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - 'ssm:GetParameter'
+        - 'ssm:GetParametersByPath'
+      Resource:
+        - 'arn:aws:ssm:us-east-1*'
+    - Effect: Allow
+      Action:
+        - 'xray:PutTraceSegments'
+        - 'xray:PutTelemetryRecords'
+      Resource:
+        - '*'
+    - Effect: Allow
+      Action:
+        - 'states:ListStateMachines'
+        - 'states:CreateActivity'
+        - 'states:StartExecution'
+        - 'states:ListExecutions'
+        - 'states:DescribeExecution'
+        - 'states:DescribeStateMachineForExecution'
+        - 'states:GetExecutionHistory'
+      Resource:
+        - 'arn:aws:states:us-east-1:xxxxxxxxxx:stateMachine:*'
+        - 'arn:aws:states:us-east-1:xxxxxxxxxx:execution:*:*'
+plugins:
+  - serverless-pseudo-parameters
+  - serverless-step-functions
+  - serverless-offline
+  - serverless-webpack
+functions:
+  logShipper:
+    handler: log-shipper.handler
+    description: >-
+      Lambda function to attach to Cloudwatch log streams; will ship logs to
+      Logzio ELK stack.
+    memorySize: 256
+  cloudwatchRegistration:
+    handler: cloudwatch-subscribe.handler
+    description: Subscribes each new lambda functions log stream to the log-shipper.
+    memorySize: 256
+  logRetention:
+    handler: log-retention.handler
+    description: >-
+      Changes the cloudwatch log retention policy to discrete timeframe to save
+      on costs.
+    memorySize: 256

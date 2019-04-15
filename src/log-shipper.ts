@@ -1,10 +1,13 @@
-import { IDictionary, ICloudWatchEvent, ICloudWatchLogEvent, wait } from "common-types";
+import {
+  IDictionary,
+  ICloudWatchEvent,
+  IAwsHandlerFunction,
+  getBodyFromPossibleLambdaProxyRequest
+} from "common-types";
 import { promisify } from "util";
 import { gunzip } from "zlib";
-// import * as net from "net";
 import axios from "axios";
-import * as parse from "../shared/log-parser";
-import { Parallel } from "wait-in-parallel";
+import * as parse from "./log-shipper/parser";
 const gunzipAsync = promisify<Buffer, Buffer>(gunzip);
 
 enum LOGZIO_PORTS {
@@ -25,44 +28,55 @@ if (!TOKEN) {
   );
 }
 
-export async function handler(
-  event: IDictionary,
-  context: IDictionary,
-  callback: (err: IDictionary | null, command?: any) => void
+/**
+ * handler
+ *
+ * The serverless function's handler (aka, starting point of execution)
+ *
+ * @param event the cloudwatch event fired contains 1:M events that need to be processed
+ * @param context AWS Lambda context object
+ * @param callback AWS Lambda callback object
+ */
+export const handler: IAwsHandlerFunction<IDictionary> = async function handler(
+  event,
+  context,
+  callback
 ) {
   context.callbackWaitsForEmptyEventLoop = false;
   try {
-    const payload = new Buffer(event.awslogs.data, "base64");
+    const request = getBodyFromPossibleLambdaProxyRequest(event);
+    const payload = new Buffer(request.awslogs.data, "base64");
     const json = (await gunzipAsync(payload)).toString("utf-8");
-    const logEvent: ICloudWatchEvent = JSON.parse(json);
-    await processAll(logEvent.logGroup, logEvent.logStream, logEvent.logEvents);
-    console.log(`Successfully processed ${logEvent.logEvents.length} log events.`);
-    callback(null, `Successfully processed ${logEvent.logEvents.length} log events.`);
+    const logEvents: ICloudWatchEvent = JSON.parse(json);
+    await processAll(logEvents);
+
+    const message: string = `Successfully processed ${
+      logEvents.logEvents.length
+    } log events.`;
+    console.log(message);
+    callback(null, {
+      message
+    });
   } catch (e) {
     callback(e);
   }
-}
+};
 
-async function processAll(
-  logGroup: string,
-  logStream: string,
-  logEvents: ICloudWatchLogEvent[]
-) {
-  let lambdaVersion = parse.lambdaVersion(logStream);
-  let functionName = parse.functionName(logGroup);
+async function processAll(event: ICloudWatchEvent) {
+  let lambdaVersion = parse.lambdaVersion(event.logStream);
+  let functionName = parse.functionName(event.logGroup);
 
   console.log(`Shipper PORT: ${PORT}, HOST: ${HOST}`);
   const logEntries: string[] = [];
-  console.log(`There are ${logEvents.length} events to ship`);
-  const p = new Parallel();
+  console.log(`There are ${event.logEvents.length} events to ship`);
 
-  logEvents.map(logEvent => {
+  event.logEvents.map(logEvent => {
     try {
       let log: any = parse.logMessage(logEvent);
 
       if (log) {
-        log.logStream = logStream;
-        log.logGroup = logGroup;
+        log.logStream = event.logStream;
+        log.logGroup = event.logGroup;
         log.lambdaFunction = functionName;
         log.lambdaVersion = lambdaVersion;
         log.fields = log.fields || {};
