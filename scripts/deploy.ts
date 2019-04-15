@@ -63,8 +63,8 @@ async function build(fns?: string[]) {
   return;
 }
 
-async function deploy(stage: string, fns: string[] = []) {
-  const msg = fns.length !== 0 ? `` : ``;
+async function deploy(stage: string, profile?: string, fns: string[] = []) {
+  const awsProfile = profile ? `--aws-profile ${profile}` : ``;
 
   try {
     if (fns.length === 0) {
@@ -72,9 +72,9 @@ async function deploy(stage: string, fns: string[] = []) {
         chalk.yellow(`- starting full serverless deployment to ${chalk.bold(stage)}`)
       );
       console.log(
-        chalk.grey(`- sls deploy --aws-s3-accelerate  --stage ${stage} --verbose`)
+        chalk.grey(`- sls deploy --aws-s3-accelerate  --stage ${stage} ${awsProfile} --verbose`)
       );
-      await asyncExec(`sls deploy --aws-s3-accelerate  --stage ${stage} --verbose`);
+      await asyncExec(`sls deploy --aws-s3-accelerate  --stage ${stage} ${awsProfile} --verbose`);
       console.log(chalk.green.bold(`- successful serverless deployment 🚀`));
     } else {
       const functions: string[] = findFunctions(fns);
@@ -92,7 +92,7 @@ async function deploy(stage: string, fns: string[] = []) {
         functions.map(fn => {
           promises.push(
             asyncExec(
-              `sls deploy function --force --aws-s3-accelerate --function ${fn} --stage ${stage}`
+              `sls deploy function --force --aws-s3-accelerate --function ${fn} --stage ${stage} ${awsProfile}`
             )
           );
         });
@@ -106,17 +106,13 @@ async function deploy(stage: string, fns: string[] = []) {
             )} to ${chalk.bold(stage)} environment.`
           )
         );
-        await asyncExec(`sls deploy --name ${fns.join(" --function ")} --stage ${stage}`);
+        await asyncExec(`sls deploy --name ${fns.join(" --function ")} --stage ${stage} ${awsProfile}`);
       }
       console.log(chalk.green.bold(`- 🚀  successful serverless deployment `));
     }
   } catch (e) {
     console.log(chalk.red.bold(`- 💩  problem deploying!`));
   }
-}
-
-function getFunctionIfScoped(): string | undefined {
-  return undefined;
 }
 
 // MAIN
