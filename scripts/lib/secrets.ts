@@ -28,7 +28,7 @@ export function getAwsCredentials(profile: string) {
     .pop()
     .slice(1, 3);
 
-  const credentialsObj: CredentialsOptions = {
+  const credentialsObj: CredentialsOptions & { region?: string } = {
     accessKeyId: "",
     secretAccessKey: ""
   };
@@ -38,6 +38,9 @@ export function getAwsCredentials(profile: string) {
     }
     if (i.includes("aws_secret_access_key")) {
       credentialsObj.secretAccessKey = i.replace(/.*aws_secret_access_key\s*=\s*/, "");
+    }
+    if (i.includes("region")) {
+      credentialsObj.region = i.replace(/.*region\s*=\s*/, "");
     }
   });
 

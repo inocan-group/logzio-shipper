@@ -1,7 +1,13 @@
-service: log-shipper
+service:
+  name: logzio-shipper
+package:
+  individually: true
+  excludeDevDependencies: false
+  browser: false
 custom:
   stage: '${opt:stage, self:provider.stage}'
   region: '${opt:region, self:provider.region}'
+  accountId: '741976569717'
   webpack:
     webpackConfig: ./webpack.config.js
     includeModules:
@@ -10,16 +16,17 @@ custom:
         - firemock
         - faker
     packager: yarn
-package:
-  individually: true
-  excludeDevDependencies: false
-  browser: false
+plugins:
+  - serverless-pseudo-parameters
+  - serverless-step-functions
+  - serverless-offline
+  - serverless-webpack
 provider:
   name: aws
   runtime: nodejs8.10
-  profile: PROFILE
+  profile: move
   stage: prod
-  region: us-east-1
+  region: us-west-2
   environment: '${file(serverless-config/env.yml):${self:custom.stage}}'
   iamRoleStatements:
     - Effect: Allow
@@ -27,7 +34,7 @@ provider:
         - 'ssm:GetParameter'
         - 'ssm:GetParametersByPath'
       Resource:
-        - 'arn:aws:ssm:us-east-1*'
+        - 'arn:aws:ssm:us-west-2*'
     - Effect: Allow
       Action:
         - 'xray:PutTraceSegments'
@@ -44,13 +51,8 @@ provider:
         - 'states:DescribeStateMachineForExecution'
         - 'states:GetExecutionHistory'
       Resource:
-        - 'arn:aws:states:us-east-1:xxxxxxxxxx:stateMachine:*'
-        - 'arn:aws:states:us-east-1:xxxxxxxxxx:execution:*:*'
-plugins:
-  - serverless-pseudo-parameters
-  - serverless-step-functions
-  - serverless-offline
-  - serverless-webpack
+        - 'arn:aws:states:us-west-2:741976569717:stateMachine:*'
+        - 'arn:aws:states:us-west-2:741976569717:execution:*:*'
 functions:
   logShipper:
     handler: src/logzio-shipper.handler
@@ -68,3 +70,4 @@ functions:
       Changes the cloudwatch log retention policy to discrete timeframe to save
       on costs.
     memorySize: 256
+stateMachines: {}

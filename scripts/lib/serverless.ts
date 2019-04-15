@@ -9,30 +9,80 @@ import chalk from "chalk";
 import * as fs from "fs";
 import * as yaml from "js-yaml";
 import { SLS_CONFIG_DIRECTORY, STATIC_DEPENDENCIES_FILE } from "..";
+import * as inquirer from "inquirer";
 
 export interface IServerlessCliOptions {
   required?: boolean;
   singular?: boolean;
   quiet?: boolean;
 }
+import serverlessConfig from "../../serverless-config/config";
+import { IServerlessAccountInfo } from "../../serverless-config/config-sections/types";
 
-export async function buildServerlessConfig(options: IDictionary = { quiet: false }) {
-  await serverless("custom", `serverless ${chalk.bold("Custom")}`, options);
-  await serverless("package", `serverless ${chalk.bold("Package")}`, options);
-  await serverless("provider", `serverless ${chalk.bold("Provider")} definition`, {
-    singular: true,
-    quiet: options.quiet
-  });
-  await serverless("plugins", `serverless ${chalk.bold("Plugins")}`, options);
-  await serverless("functions", `serverless ${chalk.bold("Function(s)")}`, {
-    required: true,
-    quiet: options.quiet
-  });
-  await serverless(
-    "stepFunctions",
-    `serverless ${chalk.bold("Step Function(s)")}`,
-    options
-  );
+export async function buildServerlessConfig(defaults: IDictionary = { quiet: false }) {
+  const accountInfo: IServerlessAccountInfo = await getAccountInfo(defaults);
+  const config = serverlessConfig(accountInfo);
+  console.log(`- Serverless configuration has been configured`);
+  const yamlString = yaml.safeDump(config);
+  console.log("yaml:\n", yamlString);
+
+  fs.writeFileSync(`${process.env.PWD}/serverless.yml`, yamlString);
+  console.log(`- Serverless config saved to "serverless.yml"`);
+}
+
+async function getAccountInfo(defaults: IDictionary): Promise<IServerlessAccountInfo> {
+  const questions = [
+    {
+      type: "input",
+      name: "serviceName",
+      message: "what is the service name which your functions will be prefixed with",
+      default: "logzio-shipper"
+    },
+    {
+      type: "input",
+      name: "profile",
+      message: "choose a profile from your AWS credentials file",
+      default: defaults.profile || "unknown"
+    },
+    {
+      type: "input",
+      name: "accountId",
+      message: "what is the Amazon Account ID which you are deploying to?",
+      default: defaults.accountId
+    },
+    {
+      type: "list",
+      name: "region",
+      message: "what is the region you will be deploying to?",
+      choices: [
+        "us-east-1",
+        "us-east-2",
+        "us-west-1",
+        "us-west-2",
+        "eu-west-1",
+        "eu-west-2",
+        "eu-west-3",
+        "eu-north-1",
+        "eu-central-1",
+        "sa-east-1",
+        "ca-central-1",
+        "ap-south-1",
+        "ap-northeast-1",
+        "ap-northeast-2",
+        "ap-northeast-3",
+        "ap-southeast-1",
+        "ap-southeast-2"
+      ],
+      default: defaults.region
+    }
+  ];
+  const answers: IDictionary = await inquirer.prompt(questions);
+  return {
+    name: answers.serviceName,
+    accountId: answers.accountId,
+    region: answers.region,
+    profile: answers.profile
+  };
 }
 
 export async function serverless(
