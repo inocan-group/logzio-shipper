@@ -53,17 +53,17 @@ plugins:
   - serverless-webpack
 functions:
   logShipper:
-    handler: log-shipper.handler
+    handler: src/logzio-shipper.handler
     description: >-
       Lambda function to attach to Cloudwatch log streams; will ship logs to
       Logzio ELK stack.
     memorySize: 256
   cloudwatchRegistration:
-    handler: cloudwatch-subscribe.handler
+    handler: src/cloudwatch-subscribe.handler
     description: Subscribes each new lambda functions log stream to the log-shipper.
     memorySize: 256
   logRetention:
-    handler: log-retention.handler
+    handler: src/cloudwatch-retention.handler
     description: >-
       Changes the cloudwatch log retention policy to discrete timeframe to save
       on costs.

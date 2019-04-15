@@ -47,8 +47,17 @@
     "chalk": "^2.4.2",
     "js-yaml": "^3.13.1",
     "rimraf": "^2.6.3",
+    "serverless": "^1.40.0",
+    "serverless-offline": "^4.9.4",
+    "serverless-pseudo-parameters": "^2.4.0",
+    "serverless-step-functions": "^1.17.0",
+    "serverless-webpack": "^5.2.0",
+    "ts-loader": "^5.3.3",
     "ts-node": "^8.1.0",
-    "typescript": "^3.4.3"
+    "typescript": "^3.4.3",
+    "webpack": "^4.30.0",
+    "webpack-cli": "^3.3.0",
+    "webpack-node-externals": "^1.7.2"
   },
   "engines": {
     "node": ">=6.0.0"
