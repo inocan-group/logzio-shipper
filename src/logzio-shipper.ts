@@ -20,7 +20,7 @@ enum LOGZIO_PORTS {
 const PORT: number = LOGZIO_PORTS.BULK_HTTPS;
 const HOST: string = process.env.LOG_HOST || "https://listener.logz.io";
 const TOKEN: string = process.env.LOG_TOKEN;
-const ENDPOINT: string = `https://${HOST}:${PORT}?token=${TOKEN}`;
+const ENDPOINT: string = `${HOST}:${PORT}?token=${TOKEN}`;
 
 if (!TOKEN) {
   throw new Error(
@@ -45,6 +45,8 @@ export const handler: IAwsHandlerFunction<IDictionary> = async function handler(
   context.callbackWaitsForEmptyEventLoop = false;
   try {
     const request = getBodyFromPossibleLambdaProxyRequest(event);
+    console.log(event);
+
     const payload = new Buffer(request.awslogs.data, "base64");
     const json = (await gunzipAsync(payload)).toString("utf-8");
     const logEvents: ICloudWatchEvent = JSON.parse(json);
