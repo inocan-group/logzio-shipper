@@ -91,7 +91,6 @@ async function processAll(event: ICloudWatchEvent) {
         log.requestId = log.fields["requestId"];
         log.kind = log.fields["kind"] || log.kind;
         log.type = "JSON";
-        log.token = token;
 
         // remove duplication for root itmes
         delete log.fields.stage;
@@ -112,7 +111,7 @@ async function processAll(event: ICloudWatchEvent) {
       throw err;
     }
   });
-  console.log(`Log Payload ${endpoint} ]:`, logEntries.join(""));
-  const results = await axios.post(endpoint, logEntries.join("\n"));
+  console.log(`Log Payload ${ENDPOINT} ]:`, logEntries.join(""));
+  const results = await axios.post(ENDPOINT, logEntries.join("\n"));
   console.log("SHIPPING RESULT", results);
 }

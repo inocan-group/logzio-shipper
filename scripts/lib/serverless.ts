@@ -9,6 +9,7 @@ import chalk from "chalk";
 import * as fs from "fs";
 import * as yaml from "js-yaml";
 import { SLS_CONFIG_DIRECTORY, STATIC_DEPENDENCIES_FILE } from "..";
+import * as inquirer from "inquirer";
 
 export interface IServerlessCliOptions {
   required?: boolean;
@@ -17,7 +18,6 @@ export interface IServerlessCliOptions {
 }
 import serverlessConfig from "../../serverless-config/config";
 import { IServerlessAccountInfo } from "../../serverless-config/config-sections/types";
-import inquirer = require("inquirer");
 
 export async function buildServerlessConfig(defaults: IDictionary = { quiet: false }) {
   const accountInfo: IServerlessAccountInfo = await getAccountInfo(defaults);
@@ -164,6 +164,35 @@ export async function serverless(
 /** tests whether the running function is running withing Lambda */
 export function isLambda() {
   return !!((process.env.LAMBDA_TASK_ROOT && process.env.AWS_EXECUTION_ENV) || false);
+}
+
+export async function includeStaticDependencies() {
+  let staticDeps;
+  try {
+    staticDeps = yaml.safeLoad(
+      fs.readFileSync(STATIC_DEPENDENCIES_FILE, { encoding: "utf-8" })
+    );
+  } catch (e) {
+    // ignore
+  }
+
+  if (staticDeps) {
+    console.log(`- Adding static dependencies to list of inclusions/exclusions`);
+
+    const config: IServerlessConfig = yaml.safeLoad(
+      fs.readFileSync(`${process.env.PWD}/serverless.yml`, { encoding: "utf-8" })
+    );
+    if (staticDeps.include && Array.isArray(staticDeps.include)) {
+      config.package.include = [...config.package.include, ...staticDeps.include];
+    }
+    if (staticDeps.exclude && Array.isArray(staticDeps.exclude)) {
+      config.package.exclude = [...config.package.exclude, ...staticDeps.exclude];
+    }
+
+    fs.writeFileSync(`${process.env.PWD}/serverless.yml`, yaml.dump(config), {
+      encoding: "utf-8"
+    });
+  }
 }
 
 export async function getFunctions() {
