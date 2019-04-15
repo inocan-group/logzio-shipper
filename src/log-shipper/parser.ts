@@ -1,4 +1,4 @@
-import { ICloudWatchLogEvent } from "common-types";
+import { ICloudWatchLogEvent, IDictionary } from "common-types";
 
 // logGroup looks like this:
 //    "logGroup": "/aws/lambda/service-env-funcName"
@@ -27,6 +27,16 @@ let tryParseJson = function(str: string) {
     return null;
   }
 };
+
+function levelFromSeverity(severity: number) {
+  const lookup: IDictionary = {
+    1: "debug",
+    2: "info",
+    3: "warn",
+    4: "error"
+  };
+  return severity > 0 && severity < 5 ? lookup[String(severity)] : "unknown";
+}
 
 // a Lambda function log message looks like this:
 //    "2017-04-26T10:41:09.023Z	db95c6da-2a6c-11e7-9550-c91b65931beb\tloading index.html...\n"
@@ -69,16 +79,57 @@ export function logMessage(logEvent: ICloudWatchLogEvent) {
 
   let fields = tryParseJson(event);
   if (fields) {
-    fields.requestId = requestId;
+    let level = levelFromSeverity(fields.severity || -1);
+    const escalateContext = function(hash: IDictionary, ...props: string[]) {
+      const regular: IDictionary = {};
+      const escalated: IDictionary = {};
+      Object.keys(hash).map(key => {
+        if (typeof hash[key] === "object") {
+          return;
+        }
+        let setTo: string;
+        if (key.includes(":")) {
+          [key, setTo] = key.split(":");
+        } else {
+          setTo = key;
+        }
+        if (props.includes(key)) {
+          regular[key] = hash.context[key];
+        } else {
+          escalated[`@[${setTo}]`] = hash[key];
+        }
+      });
+      return { regular, escalated };
+    };
 
-    let level = (fields.level || "debug").toLowerCase();
-    let message = fields.message;
+    function removeUnwanted(hash: IDictionary, ...fields: string[]) {
+      const output: IDictionary = { ...{}, ...hash };
+      fields.map(f => delete output[f as keyof typeof hash]);
+      return fields;
+    }
 
-    // level and message are lifted out, so no need to keep them there
-    delete fields.level;
-    delete fields.message;
+    const { regular, escalated } = escalateContext(
+      fields,
+      "correlationId:correlation-id",
+      "severity",
+      "region",
+      "stage"
+    );
 
-    return { level, message, fields, "@timestamp": new Date(timestamp) };
+    return {
+      ...regular,
+      ...escalated,
+      ...{
+        context: removeUnwanted(
+          fields.context,
+          "logGroupName",
+          "logStreamName",
+          "functionVersion"
+        )
+      },
+      level,
+      "@timestamp": new Date(timestamp)
+    };
   } else {
     return {
       level: "debug",

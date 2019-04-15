@@ -64,6 +64,11 @@ export const handler: IAwsHandlerFunction<IDictionary> = async function handler(
   }
 };
 
+function determineStageFromLogGroup(logGroup: string) {
+  let lookIn = logGroup.replace("/aws/lambda/", "").split("-");
+  return lookIn.slice(-2, 1);
+}
+
 async function processAll(event: ICloudWatchEvent) {
   let lambdaVersion = parse.lambdaVersion(event.logStream);
   let functionName = parse.functionName(event.logGroup);
@@ -81,28 +86,11 @@ async function processAll(event: ICloudWatchEvent) {
         log.logGroup = event.logGroup;
         log.lambdaFunction = functionName;
         log.lambdaVersion = lambdaVersion;
-        log.fields = log.fields || {};
-        log["@x-correlation-id"] = log.fields["x-correlation-id"];
-        log["@fn"] = log.fields["fn"];
-        log["@region"] = log.fields.awsRegion;
-        log["@stage"] = log.fields.stage;
-        log.fnMemory = Number(log.fields["functionMemorySize"]);
-        log.fnVersion = log.fields["functionVersion"];
-        log.requestId = log.fields["requestId"];
-        log.kind = log.fields["kind"] || log.kind;
+        log.kind = log.kind || "structured-log";
         log.type = "JSON";
-
-        // remove duplication for root itmes
-        delete log.fields.stage;
-        delete log.fields["x-correlation-id"];
-        delete log.fields["functionMemorySize"];
-        delete log.fields["functionVersion"];
-        delete log.fields["region"];
-        delete log.fields["requestId"];
-        delete log.fields["kind"];
-        delete log.fields["fn"];
-        delete log.fields["awsRegion"];
-        delete log.fields["functionName"];
+        if (!log["@stage"]) {
+          log["@stage"] = determineStageFromLogGroup(event.logGroup);
+        }
 
         logEntries.push(JSON.stringify(log).replace(/\n/g, ""));
       }
