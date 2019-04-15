@@ -72,9 +72,13 @@ async function deploy(stage: string, fns: string[] = []) {
         chalk.yellow(`- starting full serverless deployment to ${chalk.bold(stage)}`)
       );
       console.log(
-        chalk.grey(`- sls deploy --aws-s3-accelerate  --stage ${stage} --verbose`)
+        chalk.grey(
+          `- sls deploy --aws-s3-accelerate  --stage ${stage} ${awsProfile} --verbose`
+        )
       );
-      await asyncExec(`sls deploy --aws-s3-accelerate  --stage ${stage} --verbose`);
+      await asyncExec(
+        `sls deploy --aws-s3-accelerate  --stage ${stage} ${awsProfile} --verbose`
+      );
       console.log(chalk.green.bold(`- successful serverless deployment 🚀`));
     } else {
       const functions: string[] = findFunctions(fns);
