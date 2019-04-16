@@ -31,18 +31,28 @@ export async function buildServerlessConfig(defaults: IDictionary = { quiet: fal
 }
 
 async function getAccountInfo(defaults: IDictionary): Promise<IServerlessAccountInfo> {
+  const pkgJson = JSON.parse(
+    fs.readFileSync(`${process.env.PWD}/package.json`, { encoding: "utf-8" })
+  );
   const questions = [
     {
       type: "input",
       name: "serviceName",
       message: "what is the service name which your functions will be prefixed with",
-      default: "logzio-shipper"
+      default: pkgJson.name
+    },
+    {
+      type: "list",
+      name: "provider",
+      message: "which cloud provider are you using",
+      default: defaults.provider || "aws",
+      choices: ["aws", "google", "azure"]
     },
     {
       type: "input",
       name: "profile",
       message: "choose a profile from your AWS credentials file",
-      default: defaults.profile || "unknown"
+      default: defaults.profile || "your-profile"
     },
     {
       type: "input",

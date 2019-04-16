@@ -73,9 +73,10 @@ async function processAll(event: ICloudWatchEvent) {
   let lambdaVersion = parse.lambdaVersion(event.logStream);
   let functionName = parse.functionName(event.logGroup);
 
-  console.log(`Shipper PORT: ${PORT}, HOST: ${HOST}`);
+  console.log(
+    `Shipping ${event.logEvents.length} events from "${functionName}" to ${HOST}:${PORT}`
+  );
   const logEntries: string[] = [];
-  console.log(`There are ${event.logEvents.length} events to ship`);
 
   event.logEvents.map(logEvent => {
     try {
@@ -86,6 +87,8 @@ async function processAll(event: ICloudWatchEvent) {
         log.logGroup = event.logGroup;
         log.lambdaFunction = functionName;
         log.lambdaVersion = lambdaVersion;
+        log.memSize = Number(log.context.memoryLimitInMB);
+        delete log.context.memoryLimitInMB;
         log.kind = log.kind || "structured-log";
         log.type = "JSON";
         if (!log["@stage"]) {

@@ -135,7 +135,9 @@ function getFunctionIfScoped(): string | undefined {
     serviceName: typeof sls.service === "string" ? sls.service : sls.service.name,
     accountId: sls.custom.accountId || "999888777666",
     region:
-      profile && profile.region ? profile.region : sls.provider.region || "us-east-1"
+      profile && profile.region ? profile.region : sls.provider.region || "us-east-1",
+    profile: sls.provider.profile,
+    provider: sls.provider.name
   };
   await buildServerlessConfig(defaults);
 

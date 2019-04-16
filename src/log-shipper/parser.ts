@@ -3,13 +3,13 @@ import { ICloudWatchLogEvent, IDictionary } from "common-types";
 // logGroup looks like this:
 //    "logGroup": "/aws/lambda/service-env-funcName"
 export function functionName(logGroup: string) {
-  console.log("determining function name");
-
-  return logGroup
+  const fn = logGroup
     .split("/")
     .reverse()[0]
     .split("-")
     .pop();
+  console.log("fn: ", fn);
+  return fn;
 }
 
 // logStream looks like this:
@@ -96,7 +96,7 @@ export function logMessage(logEvent: ICloudWatchLogEvent) {
         if (props.includes(key)) {
           regular[key] = hash.context[key];
         } else {
-          escalated[`@[${setTo}]`] = hash[key];
+          escalated[`@${setTo}`] = hash[key];
         }
       });
       return { regular, escalated };
@@ -105,7 +105,7 @@ export function logMessage(logEvent: ICloudWatchLogEvent) {
     function removeUnwanted(hash: IDictionary, ...fields: string[]) {
       const output: IDictionary = { ...{}, ...hash };
       fields.map(f => delete output[f as keyof typeof hash]);
-      return fields;
+      return output;
     }
 
     const { regular, escalated } = escalateContext(
