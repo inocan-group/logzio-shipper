@@ -60,6 +60,7 @@ export const handler: IAwsHandlerFunction<IDictionary> = async function handler(
       message
     });
   } catch (e) {
+    console.log("ERROR:", e.message);
     callback(e);
   }
 };
@@ -102,7 +103,6 @@ async function processAll(event: ICloudWatchEvent) {
       throw err;
     }
   });
-  console.log(`Log Payload ${ENDPOINT} ]:`, logEntries.join(""));
   const results = await axios.post(ENDPOINT, logEntries.join("\n"));
-  console.log("SHIPPING RESULT", results);
+  console.log(`SHIPPING RESULT: ${results.statusText}/${results.status}`);
 }

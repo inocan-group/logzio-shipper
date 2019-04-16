@@ -105,6 +105,8 @@ export function logMessage(logEvent: ICloudWatchLogEvent) {
     function removeUnwanted(hash: IDictionary, ...fields: string[]) {
       const output: IDictionary = { ...{}, ...hash };
       fields.map(f => delete output[f as keyof typeof hash]);
+      console.log("output", output);
+
       return output;
     }
 

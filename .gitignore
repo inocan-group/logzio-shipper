@@ -10,3 +10,4 @@ lib_test
 .vagrant/
 serverless-package/
 serverless.yml
+.webpack/*
