@@ -4,9 +4,10 @@
       "appName": "log-shipper",
       "serverless": "serverless",
       "features": [
-        "wallaby"
+        "wallaby",
+        "npm"
       ],
-      "license": "Proprietary",
+      "license": "MIT",
       "coverage": [],
       "social": []
     }

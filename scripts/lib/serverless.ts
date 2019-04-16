@@ -1,36 +1,98 @@
 // tslint:disable:no-implicit-dependencies
-import { IServerlessConfig, IDictionary, IServerlessFunction, IStepFunction } from "common-types";
+import {
+  IServerlessConfig,
+  IDictionary,
+  IServerlessFunction,
+  IStepFunction
+} from "common-types";
 import chalk from "chalk";
 import * as fs from "fs";
 import * as yaml from "js-yaml";
-import * as path from "path";
 import { SLS_CONFIG_DIRECTORY, STATIC_DEPENDENCIES_FILE } from "..";
+import * as inquirer from "inquirer";
 
 export interface IServerlessCliOptions {
   required?: boolean;
   singular?: boolean;
   quiet?: boolean;
 }
+import serverlessConfig from "../../serverless-config/config";
+import { IServerlessAccountInfo } from "../../serverless-config/config-sections/types";
 
-const OFFSET_DIR = "serverless-config";
-const BASE_DIR = process.cwd();
-const CONFIG_DIR = path.join(BASE_DIR, OFFSET_DIR);
+export async function buildServerlessConfig(defaults: IDictionary = { quiet: false }) {
+  const accountInfo: IServerlessAccountInfo = await getAccountInfo(defaults);
+  const config = serverlessConfig(accountInfo);
+  console.log(`- Serverless configuration has been configured`);
+  const yamlString = yaml.safeDump(config);
+  console.log("yaml:\n", yamlString);
 
-export async function buildServerlessConfig(options: IDictionary = { quiet: false }) {
-  await serverless("plugins", `serverless ${chalk.bold("Plugins")}`, options);
-  await serverless("functions", `serverless ${chalk.bold("Function(s)")}`, {
-    required: true,
-    quiet: options.quiet
-  });
-  await serverless(
-    "stepFunctions",
-    `serverless ${chalk.bold("Step Function(s)")}`,
-    options
+  fs.writeFileSync(`${process.env.PWD}/serverless.yml`, yamlString);
+  console.log(`- Serverless config saved to "serverless.yml"`);
+}
+
+async function getAccountInfo(defaults: IDictionary): Promise<IServerlessAccountInfo> {
+  const pkgJson = JSON.parse(
+    fs.readFileSync(`${process.env.PWD}/package.json`, { encoding: "utf-8" })
   );
-  await serverless("provider", `serverless ${chalk.bold("Provider")} definition`, {
-    singular: true,
-    quiet: options.quiet
-  });
+  const questions = [
+    {
+      type: "input",
+      name: "serviceName",
+      message: "what is the service name which your functions will be prefixed with",
+      default: pkgJson.name
+    },
+    {
+      type: "list",
+      name: "provider",
+      message: "which cloud provider are you using",
+      default: defaults.provider || "aws",
+      choices: ["aws", "google", "azure"]
+    },
+    {
+      type: "input",
+      name: "profile",
+      message: "choose a profile from your AWS credentials file",
+      default: defaults.profile || "your-profile"
+    },
+    {
+      type: "input",
+      name: "accountId",
+      message: "what is the Amazon Account ID which you are deploying to?",
+      default: defaults.accountId
+    },
+    {
+      type: "list",
+      name: "region",
+      message: "what is the region you will be deploying to?",
+      choices: [
+        "us-east-1",
+        "us-east-2",
+        "us-west-1",
+        "us-west-2",
+        "eu-west-1",
+        "eu-west-2",
+        "eu-west-3",
+        "eu-north-1",
+        "eu-central-1",
+        "sa-east-1",
+        "ca-central-1",
+        "ap-south-1",
+        "ap-northeast-1",
+        "ap-northeast-2",
+        "ap-northeast-3",
+        "ap-southeast-1",
+        "ap-southeast-2"
+      ],
+      default: defaults.region
+    }
+  ];
+  const answers: IDictionary = await inquirer.prompt(questions);
+  return {
+    name: answers.serviceName,
+    accountId: answers.accountId,
+    region: answers.region,
+    profile: answers.profile
+  };
 }
 
 export async function serverless(
@@ -38,13 +100,12 @@ export async function serverless(
   name: string,
   options: IServerlessCliOptions = { required: false, singular: false }
 ) {
-  const lookFor = where === "package" ? "pkg" : where; // package is a reserved word
-  const existsAsIndex = fs.existsSync(`${CONFIG_DIR}/${lookFor}/index.ts`);
-  const existsAsFile = fs.existsSync(`${CONFIG_DIR}/${lookFor}.ts`);
+  const existsAsIndex = fs.existsSync(`${SLS_CONFIG_DIRECTORY}/${where}/index.ts`);
+  const existsAsFile = fs.existsSync(`${SLS_CONFIG_DIRECTORY}/${where}.ts`);
   const exists = existsAsIndex || existsAsFile;
 
   if (exists) {
-    let configSection: IDictionary = require(`${CONFIG_DIR}/${lookFor}`).default;
+    let configSection: IDictionary = require(`${SLS_CONFIG_DIRECTORY}/${where}`).default;
     if (!configSection) {
       console.log(
         `- The ${where} configuration does not export anything on default so skipping`
@@ -52,7 +113,7 @@ export async function serverless(
       return;
     }
     const serverlessConfig: IServerlessConfig = yaml.safeLoad(
-      fs.readFileSync("serverless.yml", {
+      fs.readFileSync(`${process.env.PWD}/serverless.yml`, {
         encoding: "utf-8"
       })
     ) as IServerlessConfig;
@@ -63,7 +124,7 @@ export async function serverless(
     if (!isDefined && options.required) {
       console.log(
         chalk.magenta(
-          `- Warning: there exist ${name} configuration at "${CONFIG_DIR}/${lookFor} but its export is empty!`
+          `- Warning: there exist ${name} configuration at "${SLS_CONFIG_DIRECTORY}/${where} but its export is empty!`
         )
       );
 
@@ -82,21 +143,30 @@ export async function serverless(
         configSection = serverlessConfig[where] as IDictionary;
       }
     }
-    serverlessConfig[where] = configSection;
-    fs.writeFileSync("serverless.yml", yaml.dump(serverlessConfig));
+    if (Object.keys(configSection).length > 0) {
+      serverlessConfig[where] = configSection;
 
-    if (!options.quiet) {
-      console.log(
-        chalk.yellow(
-          `- Injected ${
-            options.singular ? "" : Object.keys(configSection).length + " "
-          }${name} into serverless.yml`
-        )
-      );
+      if (!options.quiet) {
+        console.log(
+          chalk.yellow(
+            `- Injected ${
+              options.singular ? "" : Object.keys(configSection).length + " "
+            }${name} into serverless.yml`
+          )
+        );
+      }
+    } else {
+      if (!options.quiet) {
+        console.log(chalk.grey(`- Nothing to add in section "${name}"`));
+      }
+      delete serverlessConfig[where];
     }
+    fs.writeFileSync(`${process.env.PWD}/serverless.yml`, yaml.dump(serverlessConfig));
   } else {
     console.error(
-      chalk.grey(`- No ${name} found in ${CONFIG_DIR}/${where}/index.ts so ignoring`)
+      chalk.grey(
+        `- No ${name} found in ${SLS_CONFIG_DIRECTORY}/${where}/index.ts so ignoring`
+      )
     );
   }
 }
@@ -104,6 +174,35 @@ export async function serverless(
 /** tests whether the running function is running withing Lambda */
 export function isLambda() {
   return !!((process.env.LAMBDA_TASK_ROOT && process.env.AWS_EXECUTION_ENV) || false);
+}
+
+export async function includeStaticDependencies() {
+  let staticDeps;
+  try {
+    staticDeps = yaml.safeLoad(
+      fs.readFileSync(STATIC_DEPENDENCIES_FILE, { encoding: "utf-8" })
+    );
+  } catch (e) {
+    // ignore
+  }
+
+  if (staticDeps) {
+    console.log(`- Adding static dependencies to list of inclusions/exclusions`);
+
+    const config: IServerlessConfig = yaml.safeLoad(
+      fs.readFileSync(`${process.env.PWD}/serverless.yml`, { encoding: "utf-8" })
+    );
+    if (staticDeps.include && Array.isArray(staticDeps.include)) {
+      config.package.include = [...config.package.include, ...staticDeps.include];
+    }
+    if (staticDeps.exclude && Array.isArray(staticDeps.exclude)) {
+      config.package.exclude = [...config.package.exclude, ...staticDeps.exclude];
+    }
+
+    fs.writeFileSync(`${process.env.PWD}/serverless.yml`, yaml.dump(config), {
+      encoding: "utf-8"
+    });
+  }
 }
 
 export async function getFunctions() {

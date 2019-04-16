@@ -6,7 +6,7 @@ import chalk from "chalk";
   Object.keys(fns).map((key: string) => {
     console.log(
       `${chalk.bold(key)} [ ${chalk.grey(
-        String(fns[key].memorySize || 1024) + "mb, " + String(fns[key].timeout || 6) + "s"
+        String(fns[key].memorySize) + "mb, " + String(fns[key].timeout) + "s"
       )} ] : ${chalk.italic(fns[key].description)} ${chalk.reset(" ")}`
     );
   });

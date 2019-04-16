@@ -1,13 +1,16 @@
 // tslint:disable:no-implicit-dependencies
 import chalk from "chalk";
 import { asyncExec, exit } from "async-shelljs";
-import { IServerlessConfig } from "common-types";
+import { IServerlessConfig, IDictionary } from "common-types";
 import * as yaml from "js-yaml";
 import * as fs from "fs";
 import { parseArgv } from "./lib/util";
+import { buildServerlessConfig } from "./lib/serverless";
+import { getAwsCredentials } from "./lib/secrets";
+import { IServerlessCustomConfig } from "../serverless-config/config-sections";
 
 let _serverlessConfig: IServerlessConfig = null;
-function serverlessConfig(): IServerlessConfig {
+function serverlessConfig(): IServerlessConfig<IServerlessCustomConfig> {
   if (!_serverlessConfig) {
     _serverlessConfig = yaml.safeLoad(
       fs.readFileSync("./serverless.yml", {
@@ -33,7 +36,11 @@ function findFunctions(input: string[]): string[] {
 function findSteps(input: string[]): string[] {
   const steps: string[] = [];
   const stepFunctions = new Set(
-    Object.keys(serverlessConfig().stepFunctions.stateMachines || [])
+    Object.keys(
+      serverlessConfig().stepFunctions
+        ? serverlessConfig().stepFunctions.stateMachines
+        : []
+    )
   );
 
   input.map(i => {
@@ -65,9 +72,13 @@ async function deploy(stage: string, profile?: string, fns: string[] = []) {
         chalk.yellow(`- starting full serverless deployment to ${chalk.bold(stage)}`)
       );
       console.log(
-        chalk.grey(`- sls deploy --aws-s3-accelerate  --stage ${stage} ${awsProfile} --verbose`)
+        chalk.grey(
+          `- sls deploy --aws-s3-accelerate  --stage ${stage} ${awsProfile} --verbose`
+        )
       );
-      await asyncExec(`sls deploy --aws-s3-accelerate  --stage ${stage} ${awsProfile} --verbose`);
+      await asyncExec(
+        `sls deploy --aws-s3-accelerate  --stage ${stage} ${awsProfile} --verbose`
+      );
       console.log(chalk.green.bold(`- successful serverless deployment 🚀`));
     } else {
       const functions: string[] = findFunctions(fns);
@@ -99,7 +110,9 @@ async function deploy(stage: string, profile?: string, fns: string[] = []) {
             )} to ${chalk.bold(stage)} environment.`
           )
         );
-        await asyncExec(`sls deploy --name ${fns.join(" --function ")} --stage ${stage} ${awsProfile}`);
+        await asyncExec(
+          `sls deploy --name ${fns.join(" --function ")} --stage ${stage} ${awsProfile}`
+        );
       }
       console.log(chalk.green.bold(`- 🚀  successful serverless deployment `));
     }
@@ -111,19 +124,27 @@ async function deploy(stage: string, profile?: string, fns: string[] = []) {
 // MAIN
 
 (async () => {
-  const { params, options } = parseArgv()("--help", "--profile", "--prod");
-  const sls = await serverlessConfig();
-  const profile = options.profile ? options.profile : null;
-  const stage = options.prod ? "prod" : sls.provider.stage || "dev";
-
-  if (!options.skip) {
-    try {
-      await build(params);
-    } catch (e) {
-      console.error(`failed to execute build`);
-
-      throw e;
-    }
+  const { params, options } = parseArgv()("--help", "--profile", "--key");
+  const profile = options.profile ? getAwsCredentials(options.profile) : undefined;
+  let sls: IServerlessConfig<IServerlessCustomConfig>;
+  try {
+    sls = await serverlessConfig();
+  } catch (e) {
+    await buildServerlessConfig();
+    sls = await serverlessConfig();
   }
-  await deploy(stage, profile, params);
+  const defaults = {
+    serviceName: typeof sls.service === "string" ? sls.service : sls.service.name,
+    accountId: sls.custom.accountId || "999888777666",
+    region:
+      profile && profile.region ? profile.region : sls.provider.region || "us-east-1",
+    profile: sls.provider.profile,
+    provider: sls.provider.name
+  };
+  await buildServerlessConfig(defaults);
+
+  const stage = options.prod ? "prod" : sls.provider.stage || "dev";
+  console.log(`- deploying to the ${chalk.green.bold(stage)} env`);
+
+  await deploy(stage, params);
 })();
