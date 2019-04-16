@@ -54,7 +54,7 @@ provider:
         - 'arn:aws:states:us-west-2:741976569717:stateMachine:*'
         - 'arn:aws:states:us-west-2:741976569717:execution:*:*'
 functions:
-  logShipper:
+  logzioShipper:
     handler: src/logzio-shipper.handler
     description: >-
       Lambda function to attach to Cloudwatch log streams; will ship logs to

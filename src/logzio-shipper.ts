@@ -44,10 +44,10 @@ export const handler: IAwsHandlerFunction<IDictionary> = async function handler(
 ) {
   context.callbackWaitsForEmptyEventLoop = false;
   try {
-    const request = getBodyFromPossibleLambdaProxyRequest(event);
-    console.log(event);
+    // const request = getBodyFromPossibleLambdaProxyRequest(event);
+    // console.log(request);
 
-    const payload = new Buffer(request.awslogs.data, "base64");
+    const payload = new Buffer((event as IDictionary).awslogs.data, "base64");
     const json = (await gunzipAsync(payload)).toString("utf-8");
     const logEvents: ICloudWatchEvent = JSON.parse(json);
     await processAll(logEvents);
@@ -67,7 +67,14 @@ export const handler: IAwsHandlerFunction<IDictionary> = async function handler(
 
 function determineStageFromLogGroup(logGroup: string) {
   let lookIn = logGroup.replace("/aws/lambda/", "").split("-");
-  return lookIn.slice(-2, 1);
+  return lookIn.slice(-2)[0];
+}
+
+function remapProperty(hash: IDictionary, current: string, to: string) {
+  const output: IDictionary = { ...{}, ...hash };
+  output[to] = hash[current];
+  delete output[current];
+  return output;
 }
 
 async function processAll(event: ICloudWatchEvent) {
@@ -88,21 +95,29 @@ async function processAll(event: ICloudWatchEvent) {
         log.logGroup = event.logGroup;
         log.lambdaFunction = functionName;
         log.lambdaVersion = lambdaVersion;
-        log.memSize = Number(log.context.memoryLimitInMB);
-        delete log.context.memoryLimitInMB;
-        log.kind = log.kind || "structured-log";
+        if (log["@message"] && !log.message) {
+          log = remapProperty(log, "@message", "message");
+        }
+        if (log.context && log.context.memoryLimitInMB) {
+          log.memSize = Number(log.context.memoryLimitInMB);
+          delete log.context.memoryLimitInMB;
+        }
         log.type = "JSON";
         if (!log["@stage"]) {
           log["@stage"] = determineStageFromLogGroup(event.logGroup);
         }
 
         logEntries.push(JSON.stringify(log).replace(/\n/g, ""));
+      } else {
+        console.log("returned nothing");
       }
     } catch (err) {
       console.error(err.message);
       throw err;
     }
   });
+  console.log(logEntries.join("\n"));
+
   const results = await axios.post(ENDPOINT, logEntries.join("\n"));
   console.log(`SHIPPING RESULT: ${results.statusText}/${results.status}`);
 }

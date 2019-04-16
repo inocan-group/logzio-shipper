@@ -51,18 +51,6 @@ function findSteps(input: string[]): string[] {
   return steps;
 }
 
-async function build(fns?: string[]) {
-  try {
-    await asyncExec(`ts-node scripts/build.ts --color=true ${fns}}`);
-  } catch (e) {
-    console.error(chalk.red("- 🤯 build failed, deployment stopped"));
-    process.exit();
-  }
-  console.log(chalk.green("- Build step completed successfully 🚀"));
-
-  return;
-}
-
 async function deploy(stage: string, fns: string[] = []) {
   const msg = fns.length !== 0 ? `` : ``;
 
@@ -97,6 +85,13 @@ async function deploy(stage: string, fns: string[] = []) {
           );
         });
         await Promise.all(promises);
+      } else {
+        console.log(
+          `- you specified these functions to deploy: ${fns.join(
+            ", "
+          )}. None of these were found!`
+        );
+        process.exit();
       }
       if (steps.length > 0) {
         console.log(
@@ -106,7 +101,9 @@ async function deploy(stage: string, fns: string[] = []) {
             )} to ${chalk.bold(stage)} environment.`
           )
         );
-        await asyncExec(`sls deploy --name ${fns.join(" --function ")} --stage ${stage}`);
+        await asyncExec(
+          `sls deploy --name ${fns.join(" --function ")} --stage ${stage} `
+        );
       }
       console.log(chalk.green.bold(`- 🚀  successful serverless deployment `));
     }
@@ -135,7 +132,9 @@ function getFunctionIfScoped(): string | undefined {
     serviceName: typeof sls.service === "string" ? sls.service : sls.service.name,
     accountId: sls.custom.accountId || "999888777666",
     region:
-      profile && profile.region ? profile.region : sls.provider.region || "us-east-1"
+      profile && profile.region ? profile.region : sls.provider.region || "us-east-1",
+    profile: sls.provider.profile,
+    provider: sls.provider.name
   };
   await buildServerlessConfig(defaults);
 

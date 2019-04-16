@@ -78,6 +78,7 @@ export function logMessage(logEvent: ICloudWatchLogEvent) {
   let event = parts[2];
 
   let fields = tryParseJson(event);
+
   if (fields) {
     let level = levelFromSeverity(fields.severity || -1);
     const escalateContext = function(hash: IDictionary, ...props: string[]) {
@@ -94,7 +95,7 @@ export function logMessage(logEvent: ICloudWatchLogEvent) {
           setTo = key;
         }
         if (props.includes(key)) {
-          regular[key] = hash.context[key];
+          regular[key] = hash[key];
         } else {
           escalated[`@${setTo}`] = hash[key];
         }
@@ -105,7 +106,6 @@ export function logMessage(logEvent: ICloudWatchLogEvent) {
     function removeUnwanted(hash: IDictionary, ...fields: string[]) {
       const output: IDictionary = { ...{}, ...hash };
       fields.map(f => delete output[f as keyof typeof hash]);
-      console.log("output", output);
 
       return output;
     }
@@ -121,6 +121,7 @@ export function logMessage(logEvent: ICloudWatchLogEvent) {
     return {
       ...regular,
       ...escalated,
+      ...{ payload: fields.payload || {} },
       ...{
         context: removeUnwanted(
           fields.context,
@@ -129,14 +130,14 @@ export function logMessage(logEvent: ICloudWatchLogEvent) {
           "functionVersion"
         )
       },
-      level,
-      "@timestamp": new Date(timestamp)
+      level
+      // "@timestamp": new Date(timestamp)
     };
   } else {
     return {
       level: "debug",
       message: event,
-      "@timestamp": new Date(timestamp)
+      timestamp: new Date(timestamp)
     };
   }
 }

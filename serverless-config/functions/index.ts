@@ -1,7 +1,7 @@
 // tslint:disable:no-invalid-template-strings
 import { IServerlessFunction, IDictionary } from "common-types";
 
-export const logShipper: IServerlessFunction = {
+export const logzioShipper: IServerlessFunction = {
   handler: "src/logzio-shipper.handler",
   description:
     "Lambda function to attach to Cloudwatch log streams; will ship logs to Logzio ELK stack.",
@@ -22,7 +22,7 @@ export const logRetention: IServerlessFunction = {
 };
 
 const functions: IDictionary<IServerlessFunction> = {
-  logShipper,
+  logzioShipper,
   cloudwatchRegistration,
   logRetention
 };
