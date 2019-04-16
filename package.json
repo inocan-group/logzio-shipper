@@ -40,7 +40,7 @@
     "watch:all": "ts-node ./scripts/watch.ts all"
   },
   "dependencies": {
-    "aws-log": "^0.5.0",
+    "aws-log": "^0.6.2",
     "axios": "^0.18.0",
     "common-types": "^1.10.13"
   },
