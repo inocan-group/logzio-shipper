@@ -19,6 +19,21 @@ enum LOGZIO_PORTS {
 
 const PORT: number = LOGZIO_PORTS.BULK_HTTPS;
 const HOST: string = process.env.LOG_HOST || "https://listener.logz.io";
+const TOKEN: string = process.env.LOG_TOKEN;
+const ENDPOINT: string = `${HOST}:${PORT}?token=${TOKEN}`;
+
+if (!TOKEN) {
+  throw new Error(
+    `No TOKEN for Logz.io was found as ENV variable "LOG_TOKEN"; please set and retry.`
+  );
+}
+
+export interface IShipperError {
+  eventId: string;
+  eventMessage: string;
+  errorMessage: string;
+  stack: string;
+}
 
 /**
  * handler
@@ -36,9 +51,7 @@ export const handler: IAwsHandlerFunction<IDictionary> = async function handler(
 ) {
   context.callbackWaitsForEmptyEventLoop = false;
   try {
-<<<<<<< HEAD:src/logzio-shipper.ts
-    const request = getBodyFromPossibleLambdaProxyRequest(event);
-    const payload = new Buffer(request.awslogs.data, "base64");
+    const payload = new Buffer((event as IDictionary).awslogs.data, "base64");
     const json = (await gunzipAsync(payload)).toString("utf-8");
     const logEvents: ICloudWatchEvent = JSON.parse(json);
     await processAll(logEvents);
@@ -50,48 +63,34 @@ export const handler: IAwsHandlerFunction<IDictionary> = async function handler(
     callback(null, {
       message
     });
-=======
-    const TOKEN: string = (await getParameter('LOG_TOKEN')).Value;
-
-    if (!TOKEN) {
-      throw new Error(
-        `No TOKEN for Logz.io was found as ENV variable "LOG_TOKEN"; please set and retry.`
-      );
-    }
-
-    const ENDPOINT: string = `${HOST}:${PORT}?token=${TOKEN}`;
-    console.log(`Endpoint: ${ENDPOINT}`);
-    const payload = new Buffer(event.awslogs.data, "base64");
-    const json = (await gunzipAsync(payload)).toString("utf-8");
-    const logEvent: ICloudWatchEvent = JSON.parse(json);
-    await processAll(ENDPOINT, TOKEN, logEvent.logGroup, logEvent.logStream, logEvent.logEvents);
-    console.log(`Successfully processed ${logEvent.logEvents.length} log events.`);
-    callback(null, `Successfully processed ${logEvent.logEvents.length} log events.`);
->>>>>>> release/0.1.0:src/handlers/log-shipper.ts
   } catch (e) {
+    console.log("ERROR:", e.message);
     callback(e);
   }
 };
 
-<<<<<<< HEAD:src/logzio-shipper.ts
+function determineStageFromLogGroup(logGroup: string) {
+  let lookIn = logGroup.replace("/aws/lambda/", "").split("-");
+  return lookIn.slice(-2)[0];
+}
+
+function remapProperty(hash: IDictionary, current: string, to: string) {
+  const output: IDictionary = { ...{}, ...hash };
+  output[to] = hash[current];
+  delete output[current];
+  return output;
+}
+
 async function processAll(event: ICloudWatchEvent) {
+  const logErrors: IShipperError[] = [];
+
   let lambdaVersion = parse.lambdaVersion(event.logStream);
   let functionName = parse.functionName(event.logGroup);
-=======
-async function processAll(
-  endpoint: string,
-  token: string,
-  logGroup: string,
-  logStream: string,
-  logEvents: ICloudWatchLogEvent[]
-) {
-  let lambdaVersion = parse.lambdaVersion(logStream);
-  let functionName = parse.functionName(logGroup);
->>>>>>> release/0.1.0:src/handlers/log-shipper.ts
 
-  console.log(`Shipper PORT: ${PORT}, HOST: ${HOST}`);
+  console.log(
+    `Shipping ${event.logEvents.length} events from "${functionName}" to ${HOST}:${PORT}`
+  );
   const logEntries: string[] = [];
-  console.log(`There are ${event.logEvents.length} events to ship`);
 
   event.logEvents.map(logEvent => {
     try {
@@ -102,38 +101,74 @@ async function processAll(
         log.logGroup = event.logGroup;
         log.lambdaFunction = functionName;
         log.lambdaVersion = lambdaVersion;
-        log.fields = log.fields || {};
-        log["@x-correlation-id"] = log.fields["x-correlation-id"];
-        log["@fn"] = log.fields["fn"];
-        log["@region"] = log.fields.awsRegion;
-        log["@stage"] = log.fields.stage;
-        log.fnMemory = Number(log.fields["functionMemorySize"]);
-        log.fnVersion = log.fields["functionVersion"];
-        log.requestId = log.fields["requestId"];
-        log.kind = log.fields["kind"] || log.kind;
+        if (log["@message"] && !log.message) {
+          log = remapProperty(log, "@message", "message");
+        }
+        if (log.context && log.context.memoryLimitInMB) {
+          log.memSize = Number(log.context.memoryLimitInMB);
+          delete log.context.memoryLimitInMB;
+        }
         log.type = "JSON";
-        log.token = token;
+        if (!log["@stage"]) {
+          log["@stage"] = log.stage || determineStageFromLogGroup(event.logGroup);
+          delete log.stage;
+        }
+        if (log.payload && log.payload.sequence) {
+          if (typeof log.payload.sequence === "string") {
+            log.sequenceStr = log.payload.sequence;
+          } else {
+            log.sequence = log.payload.sequence;
+          }
+          delete log.payload.sequence;
+        }
 
-        // remove duplication for root itmes
-        delete log.fields.stage;
-        delete log.fields["x-correlation-id"];
-        delete log.fields["functionMemorySize"];
-        delete log.fields["functionVersion"];
-        delete log.fields["region"];
-        delete log.fields["requestId"];
-        delete log.fields["kind"];
-        delete log.fields["fn"];
-        delete log.fields["awsRegion"];
-        delete log.fields["functionName"];
+        if (log["@errorMessage"] || log["@errorType"]) {
+          log.level = "error";
+          if (!log.message) {
+            log.message(
+              `${log["@errorType"] || "ERROR:"}: ${log["@errorMessage"] || "unknown"} `
+            );
+          }
+        }
+
+        if (typeof log.payload === "string") {
+          try {
+            log.payload = JSON.parse(log.payload);
+          } catch (e) {
+            log.payloadStr = log.payload;
+            delete log.payload;
+          }
+        }
+
+        if (log.payload && (log.payload.eventMessage || log.payload.errorMessage)) {
+          log.level = "error";
+          if (!log.message) {
+            log.message(`Error: ${log.payload.eventMessage || log.payload.errorMessage}`);
+          }
+        }
 
         logEntries.push(JSON.stringify(log).replace(/\n/g, ""));
+      } else {
+        console.log("returned nothing");
       }
     } catch (err) {
-      console.error(err.message);
-      throw err;
+      console.log(`Failed on log event ${logEvent.id}` + err.message);
+      logErrors.push({
+        eventId: logEvent.id,
+        eventMessage: logEvent.message,
+        errorMessage: err.message,
+        stack: err.stack
+      });
     }
   });
-  console.log(`Log Payload [ ${endpoint} ]:`, logEntries.join(""));
-  const results = await axios.post(endpoint, logEntries.join("\n"));
-  console.log("SHIPPING RESULT", results);
+  if (logErrors.length > 0) {
+    logEntries.push(
+      JSON.stringify({
+        level: "error",
+        payload: logErrors
+      })
+    );
+  }
+  const results = await axios.post(ENDPOINT, logEntries.join("\n"));
+  console.log(`SHIPPING RESULT: ${results.statusText}/${results.status}`);
 }

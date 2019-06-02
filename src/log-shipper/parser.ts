@@ -1,15 +1,62 @@
-import { ICloudWatchLogEvent } from "common-types";
+import { ICloudWatchLogEvent, IDictionary } from "common-types";
+
+// takes an an input a hash and props to escalate
+function escalateContext(hash: IDictionary, ...props: string[]) {
+  const regular: IDictionary = {};
+  const escalated: IDictionary = {};
+  Object.keys(hash).map(key => {
+    if (typeof hash[key] === "object") {
+      return;
+    }
+    let setTo: string;
+    if (key.includes(":")) {
+      [key, setTo] = key.split(":");
+    } else {
+      setTo = key;
+    }
+    if (props.includes(key)) {
+      regular[key] = hash[key];
+    } else {
+      escalated[`@${setTo}`] = hash[key];
+    }
+  });
+  return { regular, escalated };
+}
+
+interface IIsolateOptions {
+  addAsterisk?: boolean;
+  /** force possible JSON string to object */
+  ensureIsObject?: string[];
+}
+
+/** isolates a set of properties  */
+function isolateProperties(
+  hash: IDictionary,
+  props: string[],
+  options: IIsolateOptions = {}
+) {
+  const _defaults: IIsolateOptions = { addAsterisk: false, ensureIsObject: [] };
+  options = { ..._defaults, ...options };
+  const output: IDictionary = {};
+  const keys = Object.keys(hash);
+  keys.forEach(key => {
+    if (props.includes(key)) {
+      const asterisk = options.addAsterisk ? "@" : "";
+      output[asterisk + key] = hash[key];
+    }
+  });
+  return output;
+}
 
 // logGroup looks like this:
 //    "logGroup": "/aws/lambda/service-env-funcName"
 export function functionName(logGroup: string) {
-  console.log("determining function name");
-
-  return logGroup
+  const fn = logGroup
     .split("/")
     .reverse()[0]
     .split("-")
     .pop();
+  return fn;
 }
 
 // logStream looks like this:
@@ -27,6 +74,16 @@ let tryParseJson = function(str: string) {
     return null;
   }
 };
+
+function levelFromSeverity(severity: number) {
+  const lookup: IDictionary = {
+    1: "debug",
+    2: "info",
+    3: "warn",
+    4: "error"
+  };
+  return severity > 0 && severity < 5 ? lookup[String(severity)] : "unknown";
+}
 
 // a Lambda function log message looks like this:
 //    "2017-04-26T10:41:09.023Z	db95c6da-2a6c-11e7-9550-c91b65931beb\tloading index.html...\n"
@@ -52,7 +109,7 @@ export function logMessage(logEvent: ICloudWatchLogEvent) {
       /REPORT RequestId: ([0-9a-z\-]*).*Duration: ([0-9]*\.[0-9]*) ms.*Billed Duration:\s*([0-9]*) ms.*Memory Size: ([0-9]*).*Max Memory Used: ([0-9]*) MB/
     );
     return {
-      message: `REPORT for ${requestId}`,
+      message: `REPORT for ${requestId} [ ${duration}ms, billed ${billedDuration}ms ]`,
       kind: "report",
       requestId,
       durationUsed: Number(duration),
@@ -68,17 +125,41 @@ export function logMessage(logEvent: ICloudWatchLogEvent) {
   let event = parts[2];
 
   let fields = tryParseJson(event);
+
   if (fields) {
-    fields.requestId = requestId;
+    let level = levelFromSeverity(fields.severity || -1);
 
-    let level = (fields.level || "debug").toLowerCase();
-    let message = fields.message;
+    function removeUnwanted(hash: IDictionary, ...fields: string[]) {
+      const output: IDictionary = { ...{}, ...hash };
+      fields.map(f => delete output[f as keyof typeof hash]);
 
-    // level and message are lifted out, so no need to keep them there
-    delete fields.level;
-    delete fields.message;
+      return output;
+    }
 
-    return { level, message, fields, "@timestamp": new Date(timestamp) };
+    const { regular, escalated } = escalateContext(
+      fields,
+      "correlationId:correlation-id",
+      "severity",
+      "region",
+      "stage",
+      ""
+    );
+
+    return {
+      ...regular,
+      ...escalated,
+      ...{ payload: fields.payload || {} },
+      ...{
+        context: removeUnwanted(
+          fields.context,
+          "logGroupName",
+          "logStreamName",
+          "functionVersion"
+        )
+      },
+      level,
+      ...{ "@timestamp": new Date(timestamp) }
+    };
   } else {
     return {
       level: "debug",

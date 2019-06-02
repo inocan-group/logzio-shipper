@@ -51,20 +51,8 @@ function findSteps(input: string[]): string[] {
   return steps;
 }
 
-async function build(fns?: string[]) {
-  try {
-    await asyncExec(`ts-node scripts/build.ts --color=true ${fns}}`);
-  } catch (e) {
-    console.error(chalk.red("- 🤯 build failed, deployment stopped"));
-    process.exit();
-  }
-  console.log(chalk.green("- Build step completed successfully 🚀"));
-
-  return;
-}
-
-async function deploy(stage: string, profile?: string, fns: string[] = []) {
-  const awsProfile = profile ? `--aws-profile ${profile}` : ``;
+async function deploy(stage: string, fns: string[] = []) {
+  const msg = fns.length !== 0 ? `` : ``;
 
   try {
     if (fns.length === 0) {
@@ -72,9 +60,9 @@ async function deploy(stage: string, profile?: string, fns: string[] = []) {
         chalk.yellow(`- starting full serverless deployment to ${chalk.bold(stage)}`)
       );
       console.log(
-        chalk.grey(`- sls deploy --aws-s3-accelerate  --stage ${stage} ${awsProfile} --verbose`)
+        chalk.grey(`- sls deploy --aws-s3-accelerate  --stage ${stage} --verbose`)
       );
-      await asyncExec(`sls deploy --aws-s3-accelerate  --stage ${stage} ${awsProfile} --verbose`);
+      await asyncExec(`sls deploy --aws-s3-accelerate  --stage ${stage} --verbose`);
       console.log(chalk.green.bold(`- successful serverless deployment 🚀`));
     } else {
       const functions: string[] = findFunctions(fns);
@@ -92,11 +80,18 @@ async function deploy(stage: string, profile?: string, fns: string[] = []) {
         functions.map(fn => {
           promises.push(
             asyncExec(
-              `sls deploy function --force --aws-s3-accelerate --function ${fn} --stage ${stage} ${awsProfile}`
+              `sls deploy function --force --aws-s3-accelerate --function ${fn} --stage ${stage}`
             )
           );
         });
         await Promise.all(promises);
+      } else {
+        console.log(
+          `- you specified these functions to deploy: ${fns.join(
+            ", "
+          )}. None of these were found!`
+        );
+        process.exit();
       }
       if (steps.length > 0) {
         console.log(
@@ -106,13 +101,19 @@ async function deploy(stage: string, profile?: string, fns: string[] = []) {
             )} to ${chalk.bold(stage)} environment.`
           )
         );
-        await asyncExec(`sls deploy --name ${fns.join(" --function ")} --stage ${stage} ${awsProfile}`);
+        await asyncExec(
+          `sls deploy --name ${fns.join(" --function ")} --stage ${stage} `
+        );
       }
       console.log(chalk.green.bold(`- 🚀  successful serverless deployment `));
     }
   } catch (e) {
     console.log(chalk.red.bold(`- 💩  problem deploying!`));
   }
+}
+
+function getFunctionIfScoped(): string | undefined {
+  return undefined;
 }
 
 // MAIN
@@ -131,7 +132,9 @@ async function deploy(stage: string, profile?: string, fns: string[] = []) {
     serviceName: typeof sls.service === "string" ? sls.service : sls.service.name,
     accountId: sls.custom.accountId || "999888777666",
     region:
-      profile && profile.region ? profile.region : sls.provider.region || "us-east-1"
+      profile && profile.region ? profile.region : sls.provider.region || "us-east-1",
+    profile: sls.provider.profile,
+    provider: sls.provider.name
   };
   await buildServerlessConfig(defaults);
 
