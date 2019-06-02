@@ -1,5 +1,53 @@
 import { ICloudWatchLogEvent, IDictionary } from "common-types";
 
+// takes an an input a hash and props to escalate
+function escalateContext(hash: IDictionary, ...props: string[]) {
+  const regular: IDictionary = {};
+  const escalated: IDictionary = {};
+  Object.keys(hash).map(key => {
+    if (typeof hash[key] === "object") {
+      return;
+    }
+    let setTo: string;
+    if (key.includes(":")) {
+      [key, setTo] = key.split(":");
+    } else {
+      setTo = key;
+    }
+    if (props.includes(key)) {
+      regular[key] = hash[key];
+    } else {
+      escalated[`@${setTo}`] = hash[key];
+    }
+  });
+  return { regular, escalated };
+}
+
+interface IIsolateOptions {
+  addAsterisk?: boolean;
+  /** force possible JSON string to object */
+  ensureIsObject?: string[];
+}
+
+/** isolates a set of properties  */
+function isolateProperties(
+  hash: IDictionary,
+  props: string[],
+  options: IIsolateOptions = {}
+) {
+  const _defaults: IIsolateOptions = { addAsterisk: false, ensureIsObject: [] };
+  options = { ..._defaults, ...options };
+  const output: IDictionary = {};
+  const keys = Object.keys(hash);
+  keys.forEach(key => {
+    if (props.includes(key)) {
+      const asterisk = options.addAsterisk ? "@" : "";
+      output[asterisk + key] = hash[key];
+    }
+  });
+  return output;
+}
+
 // logGroup looks like this:
 //    "logGroup": "/aws/lambda/service-env-funcName"
 export function functionName(logGroup: string) {
@@ -8,7 +56,6 @@ export function functionName(logGroup: string) {
     .reverse()[0]
     .split("-")
     .pop();
-  console.log("fn: ", fn);
   return fn;
 }
 
@@ -62,7 +109,7 @@ export function logMessage(logEvent: ICloudWatchLogEvent) {
       /REPORT RequestId: ([0-9a-z\-]*).*Duration: ([0-9]*\.[0-9]*) ms.*Billed Duration:\s*([0-9]*) ms.*Memory Size: ([0-9]*).*Max Memory Used: ([0-9]*) MB/
     );
     return {
-      message: `REPORT for ${requestId}`,
+      message: `REPORT for ${requestId} [ ${duration}ms, billed ${billedDuration}ms ]`,
       kind: "report",
       requestId,
       durationUsed: Number(duration),
@@ -81,27 +128,6 @@ export function logMessage(logEvent: ICloudWatchLogEvent) {
 
   if (fields) {
     let level = levelFromSeverity(fields.severity || -1);
-    const escalateContext = function(hash: IDictionary, ...props: string[]) {
-      const regular: IDictionary = {};
-      const escalated: IDictionary = {};
-      Object.keys(hash).map(key => {
-        if (typeof hash[key] === "object") {
-          return;
-        }
-        let setTo: string;
-        if (key.includes(":")) {
-          [key, setTo] = key.split(":");
-        } else {
-          setTo = key;
-        }
-        if (props.includes(key)) {
-          regular[key] = hash[key];
-        } else {
-          escalated[`@${setTo}`] = hash[key];
-        }
-      });
-      return { regular, escalated };
-    };
 
     function removeUnwanted(hash: IDictionary, ...fields: string[]) {
       const output: IDictionary = { ...{}, ...hash };
@@ -115,7 +141,8 @@ export function logMessage(logEvent: ICloudWatchLogEvent) {
       "correlationId:correlation-id",
       "severity",
       "region",
-      "stage"
+      "stage",
+      ""
     );
 
     return {
@@ -130,14 +157,14 @@ export function logMessage(logEvent: ICloudWatchLogEvent) {
           "functionVersion"
         )
       },
-      level
-      // "@timestamp": new Date(timestamp)
+      level,
+      ...{ "@timestamp": new Date(timestamp) }
     };
   } else {
     return {
       level: "debug",
       message: event,
-      timestamp: new Date(timestamp)
+      "@timestamp": new Date(timestamp)
     };
   }
 }

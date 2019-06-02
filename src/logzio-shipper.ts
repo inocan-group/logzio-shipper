@@ -28,6 +28,13 @@ if (!TOKEN) {
   );
 }
 
+export interface IShipperError {
+  eventId: string;
+  eventMessage: string;
+  errorMessage: string;
+  stack: string;
+}
+
 /**
  * handler
  *
@@ -44,9 +51,6 @@ export const handler: IAwsHandlerFunction<IDictionary> = async function handler(
 ) {
   context.callbackWaitsForEmptyEventLoop = false;
   try {
-    // const request = getBodyFromPossibleLambdaProxyRequest(event);
-    // console.log(request);
-
     const payload = new Buffer((event as IDictionary).awslogs.data, "base64");
     const json = (await gunzipAsync(payload)).toString("utf-8");
     const logEvents: ICloudWatchEvent = JSON.parse(json);
@@ -78,6 +82,8 @@ function remapProperty(hash: IDictionary, current: string, to: string) {
 }
 
 async function processAll(event: ICloudWatchEvent) {
+  const logErrors: IShipperError[] = [];
+
   let lambdaVersion = parse.lambdaVersion(event.logStream);
   let functionName = parse.functionName(event.logGroup);
 
@@ -104,7 +110,41 @@ async function processAll(event: ICloudWatchEvent) {
         }
         log.type = "JSON";
         if (!log["@stage"]) {
-          log["@stage"] = determineStageFromLogGroup(event.logGroup);
+          log["@stage"] = log.stage || determineStageFromLogGroup(event.logGroup);
+          delete log.stage;
+        }
+        if (log.payload && log.payload.sequence) {
+          if (typeof log.payload.sequence === "string") {
+            log.sequenceStr = log.payload.sequence;
+          } else {
+            log.sequence = log.payload.sequence;
+          }
+          delete log.payload.sequence;
+        }
+
+        if (log["@errorMessage"] || log["@errorType"]) {
+          log.level = "error";
+          if (!log.message) {
+            log.message(
+              `${log["@errorType"] || "ERROR:"}: ${log["@errorMessage"] || "unknown"} `
+            );
+          }
+        }
+
+        if (typeof log.payload === "string") {
+          try {
+            log.payload = JSON.parse(log.payload);
+          } catch (e) {
+            log.payloadStr = log.payload;
+            delete log.payload;
+          }
+        }
+
+        if (log.payload && (log.payload.eventMessage || log.payload.errorMessage)) {
+          log.level = "error";
+          if (!log.message) {
+            log.message(`Error: ${log.payload.eventMessage || log.payload.errorMessage}`);
+          }
         }
 
         logEntries.push(JSON.stringify(log).replace(/\n/g, ""));
@@ -112,12 +152,23 @@ async function processAll(event: ICloudWatchEvent) {
         console.log("returned nothing");
       }
     } catch (err) {
-      console.error(err.message);
-      throw err;
+      console.log(`Failed on log event ${logEvent.id}` + err.message);
+      logErrors.push({
+        eventId: logEvent.id,
+        eventMessage: logEvent.message,
+        errorMessage: err.message,
+        stack: err.stack
+      });
     }
   });
-  console.log(logEntries.join("\n"));
-
+  if (logErrors.length > 0) {
+    logEntries.push(
+      JSON.stringify({
+        level: "error",
+        payload: logErrors
+      })
+    );
+  }
   const results = await axios.post(ENDPOINT, logEntries.join("\n"));
   console.log(`SHIPPING RESULT: ${results.statusText}/${results.status}`);
 }
