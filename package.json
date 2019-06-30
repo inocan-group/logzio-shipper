@@ -29,7 +29,6 @@
     "fns": "./node_modules/.bin/ts-node ./scripts/fns.ts ",
     "deploy": "./node_modules/.bin/ts-node ./scripts/deploy.ts",
     "deploy-production": "./node_modules/.bin/ts-node ./scripts/deploy.ts ",
-    "publish": "./node_modules/.bin/ts-node ./scripts/publish.ts ",
     "package": "./node_modules/.bin/ts-node ./scripts/package.ts ",
     "help": "./node_modules/.bin/ts-node ./scripts/help.ts",
     "coverage": "nyc --reporter=html _mocha --require ts-node/register 'test/**/*-spec.ts' && open coverage/index.html",
