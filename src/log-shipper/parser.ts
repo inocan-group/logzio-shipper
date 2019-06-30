@@ -119,11 +119,8 @@ export function logMessage(logEvent: ICloudWatchLogEvent) {
     };
   }
 
-  let parts = logEvent.message.split("\t", 3);
-  let timestamp = parts[0];
-  let requestId = parts[1];
-  let event = parts[2];
-
+  const { message, timestamp } = logEvent;
+  const event = message.substring(message.indexOf('{'), message.lastIndexOf('}') + 1);
   let fields = tryParseJson(event);
 
   if (fields) {
