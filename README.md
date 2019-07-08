@@ -53,12 +53,8 @@ Use the steps below to get your logs into Logzio.
    2. Using your `serverless.yml` and `~/.aws/credentials` files, it will set key
       variables for logzio (port, host, and token) into your AWS's
       [SSM](https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-paramstore.html).
-   3. Add a definition for three functions in your `serverless.yml` file (if they weren't
-      there already):
-
-      - `logzio-shipper.ts` - the handler function for the log shipper
-      - `cloudwatch-subscribe.ts` - the auto-subscription script for logging
-      - `log-retension.ts` - the function to set log retention in your repo
+   3. Add a definition for the `logzioShipper` handler in your `serverless.yml` file (if it's not
+      there already)
 
 > Note: **SSM** is a great way to store important but secure data that doesn't fit well
 > into an environment variables. If you're interested in what variables are set you can
