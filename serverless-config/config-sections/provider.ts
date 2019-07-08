@@ -6,7 +6,7 @@ export const provider = (
 ): { provider: IServerlessProvider } => ({
   provider: {
     name: "aws",
-    runtime: "nodejs8.10",
+    runtime: "nodejs10.x",
     profile: config.profile,
     stage: "prod",
     region: config.region,
