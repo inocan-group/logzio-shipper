@@ -8,23 +8,8 @@ export const logzioShipper: IServerlessFunction = {
   memorySize: 256
 };
 
-export const cloudwatchRegistration: IServerlessFunction = {
-  handler: "src/cloudwatch-subscribe.handler",
-  description: "Subscribes each new lambda functions log stream to the log-shipper.",
-  memorySize: 256
-};
-
-export const logRetention: IServerlessFunction = {
-  handler: "src/cloudwatch-retention.handler",
-  description:
-    "Changes the cloudwatch log retention policy to discrete timeframe to save on costs.",
-  memorySize: 256
-};
-
 const functions: IDictionary<IServerlessFunction> = {
-  logzioShipper,
-  cloudwatchRegistration,
-  logRetention
+  logzioShipper
 };
 
 export default functions;

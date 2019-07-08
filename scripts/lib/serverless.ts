@@ -35,7 +35,7 @@ async function getAccountInfo(defaults: IDictionary): Promise<IServerlessAccount
     fs.readFileSync(`${process.env.PWD}/package.json`, { encoding: "utf-8" })
   );
 
-  const questions = [
+  const questions: inquirer.Question[] = [
     {
       type: "input",
       name: "serviceName",
